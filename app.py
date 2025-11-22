@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import os
 import textwrap
+import asyncio
 from io import BytesIO
 from datetime import datetime, timedelta
 from langchain_community.vectorstores import Chroma
@@ -12,6 +13,14 @@ from langchain.prompts import PromptTemplate
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
+
+# --- 0. ASYNCIO FIX FOR CLOUD ---
+# This fixes the "no current event loop" error
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
 # --- 1. CONFIG & SECURITY ---
 st.set_page_config(page_title="Fiscal Navigator")
@@ -68,7 +77,8 @@ init_db()
 def load_brain():
     model_name = "models/embedding-001"
     embeddings = GoogleGenerativeAIEmbeddings(model=model_name)
-    vector_db = Chroma(persist_directory="chroma_db", embedding_function=embeddings)
+    vector_db = Chroma(persist_directory="chroma_db", 
+embedding_function=embeddings)
     
     # ULTRA SAFE PROMPT CONSTRUCTION
     # No line is longer than ~50 chars
@@ -81,9 +91,11 @@ def load_brain():
     
     sys_prompt = p1 + p2 + p3 + p4 + p5 + p6
     
-    PROMPT = PromptTemplate(template=sys_prompt, input_variables=["context", "question"])
+    PROMPT = PromptTemplate(template=sys_prompt, 
+input_variables=["context", "question"])
     
-    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.1)
+    llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", 
+temperature=0.1)
     
     qa_chain = RetrievalQA.from_chain_type(
         llm=llm,
@@ -153,13 +165,15 @@ if st.button("Generate Strategy", type="primary"):
                 log_usage(email)
                 
                 answer = result['result']
-                sources = [doc.metadata.get('source', 'Unknown') for doc in result['source_documents']]
+                sources = [doc.metadata.get('source', 'Unknown') for doc 
+in result['source_documents']]
                 
                 st.success("Analysis Complete")
                 st.write(answer)
                 
                 pdf = create_pdf(answer, list(set(sources)))
-                st.download_button("📄 Download PDF", pdf, "Strategy.pdf", "application/pdf")
+                st.download_button("📄 Download PDF", pdf, 
+"Strategy.pdf", "application/pdf")
                 
             except Exception as e:
                 st.error(f"System Error: {e}")
